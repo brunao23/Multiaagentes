@@ -6,11 +6,17 @@ import time
 import sys
 import base64
 import threading
+import os
+from dotenv import load_dotenv
+
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
 
 print(sys.path)
 
 # Configuração da API OpenAI
-client = OpenAI(api_key="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")
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
 # Configuração da Evolution API
 EVOLUTION_API_KEY = "3509BC09DCA2-467B-86F7-BF3AD7E6D2DA"
@@ -19,16 +25,20 @@ EVOLUTION_URL = "https://api.iagoflow.com"
 
 # Função para gerar textos usando o OpenAI
 def get_chat_completion(prompt, role="user", progress_bar=None):
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "Você é o mais poderoso especialista em copywriting, especialista em textos persuasivos para qualquer tipo de conteúdo."},
-            {"role": role, "content": prompt}
-        ]
-    )
-    if progress_bar:
-        progress_bar.progress(1.0)
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Você é o mais poderoso especialista em copywriting, especialista em textos persuasivos para qualquer tipo de conteúdo."},
+                {"role": role, "content": prompt}
+            ]
+        )
+        if progress_bar:
+            progress_bar.progress(1.0)
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Erro ao gerar texto: {str(e)}")
+        return None
 
 # Prompts para cada tipo de copy
 def get_prompts_by_category(category, idea):
@@ -89,6 +99,9 @@ def copywriting_workflow(category, idea):
         else:
             texto = get_chat_completion(prompt + f"\nTexto anterior: {workflow_responses[list(prompts.keys())[i-1]]}", progress_bar=etapa_progress)
         
+        if texto is None:
+            return None
+        
         workflow_responses[etapa] = texto
         progress.progress((i + 1) / len(prompts))
         time.sleep(1)
@@ -139,7 +152,7 @@ def send_delayed_message(name, number, message, delay):
     send_whatsapp_message(name, number, message)
 
 # Streamlit Interface
-st.title(" Sistema de MultiAgentes IA 🤖✍🏼  Gerador de Copywriting - v1")
+st.title("Sistema de MultiAgentes IA 🤖✍🏼 Gerador de Copywriting - v1")
 
 # Entrada do usuário
 user_name = st.text_input("Digite seu nome:")
@@ -155,21 +168,24 @@ if st.button("Gerar e Baixar Copy"):
             st.write("Iniciando processo de geração de copy...")
             responses = copywriting_workflow(category, idea)
 
-            # Gerar PDF
-            with st.spinner("Gerando PDF..."):
-                pdf_content = generate_pdf(responses)
-            
-            if pdf_content:
-                b64 = base64.b64encode(pdf_content).decode()
-                href = f'<a href="data:application/pdf;base64,{b64}" download="Copys_Geradas.pdf">Baixar Copys em PDF</a>'
-                st.markdown(href, unsafe_allow_html=True)
-                st.success("Copy gerada com sucesso! Clique no link acima para baixar o PDF.")
-            else:
-                st.error("Erro ao gerar o PDF.")
+            if responses:
+                # Gerar PDF
+                with st.spinner("Gerando PDF..."):
+                    pdf_content = generate_pdf(responses)
+                
+                if pdf_content:
+                    b64 = base64.b64encode(pdf_content).decode()
+                    href = f'<a href="data:application/pdf;base64,{b64}" download="Copys_Geradas.pdf">Baixar Copys em PDF</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success("Copy gerada com sucesso! Clique no link acima para baixar o PDF.")
 
-            # Enviar mensagem no WhatsApp após 1 minuto (em background)
-            message = f"Fala, {user_name}! Aqui é o IA.go. E aí, gostou das Copys?"
-            threading.Thread(target=send_delayed_message, args=(user_name, user_whatsapp, message, 60)).start()
+                    # Enviar mensagem no WhatsApp após 1 minuto (em background)
+                    message = f"Fala, {user_name}! Aqui é o IA.go. E aí, gostou das Copys?"
+                    threading.Thread(target=send_delayed_message, args=(user_name, user_whatsapp, message, 60)).start()
+                else:
+                    st.error("Erro ao gerar o PDF.")
+            else:
+                st.error("Não foi possível gerar a copy. Por favor, verifique a chave da API e tente novamente.")
 
         except Exception as e:
             st.error(f"Ocorreu um erro: {str(e)}")
