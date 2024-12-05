@@ -4,6 +4,8 @@ from fpdf import FPDF
 import os
 import requests
 import time
+import sys
+print(sys.path)
 
 # Configuração da API OpenAI
 openai.api_key = "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"
