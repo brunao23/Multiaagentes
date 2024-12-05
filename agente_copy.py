@@ -10,8 +10,7 @@ import threading
 print(sys.path)
 
 # Configuração da API OpenAI
-openai.api_key = "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"
-
+openai.api_key = "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"
 # Configuração da Evolution API
 EVOLUTION_API_KEY = "3509BC09DCA2-467B-86F7-BF3AD7E6D2DA"
 INSTANCE_NAME = "BrunÃo2"
@@ -139,7 +138,7 @@ def send_delayed_message(name, number, message, delay):
     send_whatsapp_message(name, number, message)
 
 # Streamlit Interface
-st.title("Gerador de Copywriting com PDF 📲")
+st.title("Sistema de MultiAgentes IA 🤖✍🏼 Gerador de Copywriting - v1")
 
 # Entrada do usuário
 user_name = st.text_input("Digite seu nome:")
