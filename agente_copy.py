@@ -1,14 +1,16 @@
 import streamlit as st
-import openai
-from fpdf import FPDF
-import os
+from openai import OpenAI
+import pdfkit
 import requests
 import time
 import sys
+import base64
+import threading
+
 print(sys.path)
 
 # Configuração da API OpenAI
-openai.api_key = "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"
+client = OpenAI(api_key="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")
 
 # Configuração da Evolution API
 EVOLUTION_API_KEY = "3509BC09DCA2-467B-86F7-BF3AD7E6D2DA"
@@ -16,15 +18,17 @@ INSTANCE_NAME = "BrunÃo2"
 EVOLUTION_URL = "https://api.iagoflow.com"
 
 # Função para gerar textos usando o OpenAI
-def get_chat_completion(prompt, role="user"):
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+def get_chat_completion(prompt, role="user", progress_bar=None):
+    response = client.chat.completions.create(
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "Você é o mais poderoso especialista em copywriting, especialista em textos persuasivos para qualquer tipo de conteúdo."},
             {"role": role, "content": prompt}
         ]
     )
-    return response['choices'][0]['message']['content']
+    if progress_bar:
+        progress_bar.progress(1.0)
+    return response.choices[0].message.content
 
 # Prompts para cada tipo de copy
 def get_prompts_by_category(category, idea):
@@ -73,57 +77,47 @@ def copywriting_workflow(category, idea):
     workflow_responses = {}
     prompts = get_prompts_by_category(category, idea)
 
-    # Barra de progresso
+    # Barra de progresso geral
     progress = st.progress(0)
 
-    # Etapa 1: Criador
-    st.write("Gerando conteúdo: Criador...")
-    criador_text = get_chat_completion(prompts["Criador"])
-    workflow_responses["Criador"] = criador_text
-    progress.progress(25)
-    time.sleep(1)
-
-    # Etapa 2: Revisor
-    st.write("Gerando conteúdo: Revisor...")
-    revisor_text = get_chat_completion(prompts["Revisor"] + f"\nTexto: {criador_text}")
-    workflow_responses["Revisor"] = revisor_text
-    progress.progress(50)
-    time.sleep(1)
-
-    # Etapa 3: Supervisor
-    st.write("Gerando conteúdo: Supervisor...")
-    supervisor_feedback = get_chat_completion(prompts["Supervisor"] + f"\nTexto revisado: {revisor_text}")
-    workflow_responses["Supervisor"] = supervisor_feedback
-    progress.progress(75)
-    time.sleep(1)
-
-    # Etapa 4: Finalizador
-    st.write("Gerando conteúdo: Finalizador...")
-    final_text = get_chat_completion(prompts["Finalizador"] + f"\nTexto revisado: {revisor_text}\nFeedback: {supervisor_feedback}")
-    workflow_responses["Finalizador"] = final_text
-    progress.progress(100)
+    for i, (etapa, prompt) in enumerate(prompts.items()):
+        st.write(f"Gerando conteúdo: {etapa}...")
+        etapa_progress = st.progress(0)
+        
+        if i == 0:
+            texto = get_chat_completion(prompt, progress_bar=etapa_progress)
+        else:
+            texto = get_chat_completion(prompt + f"\nTexto anterior: {workflow_responses[list(prompts.keys())[i-1]]}", progress_bar=etapa_progress)
+        
+        workflow_responses[etapa] = texto
+        progress.progress((i + 1) / len(prompts))
+        time.sleep(1)
 
     return workflow_responses
 
 # Função para criar um PDF com os textos gerados
-def generate_pdf(responses, file_name="Copys_Geradas.pdf"):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-
-    pdf.cell(200, 10, txt="Resultados das Copys Geradas", ln=True, align='C')
-    pdf.ln(10)
+def generate_pdf(responses):
+    html_content = """
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body { font-family: Arial, sans-serif; }
+            h1 { color: #333366; }
+            h2 { color: #666699; }
+        </style>
+    </head>
+    <body>
+        <h1>Resultados das Copys Geradas</h1>
+    """
 
     for etapa, texto in responses.items():
-        pdf.set_font("Arial", style="B", size=12)
-        pdf.cell(0, 10, f"{etapa}:", ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.multi_cell(0, 10, texto)
-        pdf.ln(5)
+        html_content += f"<h2>{etapa}</h2><p>{texto}</p>"
 
-    pdf.output(file_name)
-    return file_name
+    html_content += "</body></html>"
+
+    pdf = pdfkit.from_string(html_content, False)
+    return pdf
 
 # Função para enviar mensagem para o WhatsApp
 def send_whatsapp_message(name, number, message):
@@ -137,11 +131,15 @@ def send_whatsapp_message(name, number, message):
         "text": message,
         "delay": 1
     }
-    response = requests.post(url, json=payload, headers=headers)
-    return response.status_code == 200
+    requests.post(url, json=payload, headers=headers)
+
+# Função para enviar mensagem após um atraso
+def send_delayed_message(name, number, message, delay):
+    time.sleep(delay)
+    send_whatsapp_message(name, number, message)
 
 # Streamlit Interface
-st.title("Gerador de Copywriting com PDF e WhatsApp 📲")
+st.title(" Sistema de MultiAgentes IA 🤖✍🏼  Gerador de Copywriting - v1")
 
 # Entrada do usuário
 user_name = st.text_input("Digite seu nome:")
@@ -153,28 +151,25 @@ if st.button("Gerar e Baixar Copy"):
     if not user_name or not user_whatsapp or not idea:
         st.error("Por favor, preencha todos os campos!")
     else:
-        st.write("Iniciando processo de geração de copy...")
-        responses = copywriting_workflow(category, idea)
+        try:
+            st.write("Iniciando processo de geração de copy...")
+            responses = copywriting_workflow(category, idea)
 
-        # Exibir resultados na interface
-        st.subheader("Textos Gerados")
-        for etapa, texto in responses.items():
-            st.write(f"**{etapa}**: {texto}")
+            # Gerar PDF
+            with st.spinner("Gerando PDF..."):
+                pdf_content = generate_pdf(responses)
+            
+            if pdf_content:
+                b64 = base64.b64encode(pdf_content).decode()
+                href = f'<a href="data:application/pdf;base64,{b64}" download="Copys_Geradas.pdf">Baixar Copys em PDF</a>'
+                st.markdown(href, unsafe_allow_html=True)
+                st.success("Copy gerada com sucesso! Clique no link acima para baixar o PDF.")
+            else:
+                st.error("Erro ao gerar o PDF.")
 
-        # Gerar PDF
-        pdf_file_name = generate_pdf(responses)
-        with open(pdf_file_name, "rb") as pdf_file:
-            st.download_button(
-                label="Baixar Copys em PDF",
-                data=pdf_file,
-                file_name="Copys_Geradas.pdf",
-                mime="application/pdf"
-            )
+            # Enviar mensagem no WhatsApp após 1 minuto (em background)
+            message = f"Fala, {user_name}! Aqui é o IA.go. E aí, gostou das Copys?"
+            threading.Thread(target=send_delayed_message, args=(user_name, user_whatsapp, message, 60)).start()
 
-        # Enviar mensagem no WhatsApp após 1 minuto
-        message = f"Fala, {user_name}! Aqui é o IA.go. E aí, gostou das Copys?"
-        time.sleep(60)  # Esperar 1 minuto
-        if send_whatsapp_message(user_name, user_whatsapp, message):
-            st.success("Mensagem enviada com sucesso para o WhatsApp!")
-        else:
-            st.error("Erro ao enviar mensagem para o WhatsApp.")
+        except Exception as e:
+            st.error(f"Ocorreu um erro: {str(e)}")
