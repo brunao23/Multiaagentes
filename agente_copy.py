@@ -10,7 +10,7 @@ import threading
 print(sys.path)
 
 # Configuração da API OpenAI
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 # Configuração da Evolution API
 EVOLUTION_API_KEY = "3509BC09DCA2-467B-86F7-BF3AD7E6D2DA"
