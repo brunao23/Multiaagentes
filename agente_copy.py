@@ -20,7 +20,7 @@ EVOLUTION_URL = "https://api.iagoflow.com"
 # Função para gerar textos usando o OpenAI
 def get_chat_completion(prompt, role="user", progress_bar=None):
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4",
         messages=[
             {"role": "system", "content": "Você é o mais poderoso especialista em copywriting, especialista em textos persuasivos para qualquer tipo de conteúdo."},
             {"role": role, "content": prompt}
