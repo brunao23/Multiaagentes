@@ -10,7 +10,7 @@ import threading
 print(sys.path)
 
 # Configuração da API OpenAI
-openai.api_key = "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"
+openai.api_key = "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"
 # Configuração da Evolution API
 EVOLUTION_API_KEY = "3509BC09DCA2-467B-86F7-BF3AD7E6D2DA"
 INSTANCE_NAME = "BrunÃo2"
